@@ -4,7 +4,8 @@
 
 .DESCRIPTION
 
-.PARAMETER 
+.PARAMETER $TestPaths
+  Locations of Atomic Red Team Tests
 
 .OUTPUTS
 
@@ -21,7 +22,7 @@
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 param(
-  
+  [string[]]$TestPaths
 )
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
@@ -64,6 +65,18 @@ function Log-Rotate ()
     }
 }
 
+function Verify-Paths ()
+{
+    foreach ($Path in $TestPaths)
+    {
+        if (-not (Test-Path $Path))
+        {
+            Write-Verbose-Log "Error" "Specified Path does not exist : $($Path)" "" $sLogFileJson
+            exit
+        }
+    }
+}
+
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
@@ -71,5 +84,16 @@ Write-Verbose-Log "INFO" "Script Start" "" $sLogFileJson
 
 Write-Verbose-Log "INFO" "Start Logrotate" "" $sLogFileJson
 Log-Rotate
+
+Write-Verbose-Log "INFO" "Path Verification" "" $sLogFileJson
+Verify-Paths
+
+# Load ART Powershell Framework
+ 
+# Get Latest Atomic Checks
+
+# Handle Parameters
+
+# Launch Checks
 
 Write-Verbose-Log "INFO" "Script End" "" $sLogFileJson
