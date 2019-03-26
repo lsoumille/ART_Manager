@@ -22,7 +22,7 @@
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 param(
-  [string[]]$TestPaths,
+  [string]$TestPaths,
   [string]$ARTPath = "C:\Program Files\atomic-red-team\execution-frameworks\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam.psm1"
 )
 
@@ -37,6 +37,13 @@ $sLogPath = ".\"
 $sLogName = "art_manager_$($day).log"
 $sLogFileJson = Join-Path -Path $sLogPath -ChildPath $sLogName
 $Keep = 5
+
+$Temp_Folder = "C:\Windows\Temp"
+
+#Git
+$Test_Path_Git = "..."
+$Atomic_Checks = Join-Path -Path $Temp_Folder -ChildPath "atomic_tests"
+
 
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
 
@@ -96,6 +103,29 @@ function Load-ART ()
     }
 }
 
+function Get-Latest-Atomic-Checks ()
+{
+    try 
+    {
+        $Current_Location = Get-Location
+        Set-Location $Temp_Folder
+        git clone $Test_Path_Git
+        Set-Location $Current_Location
+    }
+    catch
+    {
+        Set-Location $Current_Location
+        Write-Verbose-Log "Error" "Error when pulling latest ART checks version" $_.Exception $sLogFileJson
+        Clean-Up
+        exit
+    }
+}
+
+function Clean-Up ()
+{
+    Remove-Item -Recurse -Force -Path $Atomic_Checks
+}
+
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
@@ -104,16 +134,20 @@ Write-Verbose-Log "INFO" "Script Start" "" $sLogFileJson
 Write-Verbose-Log "INFO" "Start Logrotate" "" $sLogFileJson
 Log-Rotate
 
-Write-Verbose-Log "INFO" "Path Verification" "" $sLogFileJson
-Verify-Paths
+#Write-Verbose-Log "INFO" "Path Verification" "" $sLogFileJson
+#Verify-Paths
 
 Write-Verbose-Log "INFO" "Load ART PS Framework" "" $sLogFileJson
 Load-ART
- 
-# Get Latest Atomic Checks
+
+Write-Verbose-Log "INFO" "Get Latest Atomic Checks" "" $sLogFileJson
+#Update-Atomic-Checks-Dirs 
 
 # Handle Parameters
 
 # Launch Checks
+
+Write-Verbose-Log "INFO" "Clean Up" "" $sLogFileJson
+Clean-Up
 
 Write-Verbose-Log "INFO" "Script End" "" $sLogFileJson
