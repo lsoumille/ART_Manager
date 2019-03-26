@@ -22,7 +22,8 @@
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 param(
-  [string[]]$TestPaths
+  [string[]]$TestPaths,
+  [string]$ARTPath = "C:\Program Files\atomic-red-team\execution-frameworks\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam.psm1"
 )
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
@@ -71,9 +72,27 @@ function Verify-Paths ()
     {
         if (-not (Test-Path $Path))
         {
-            Write-Verbose-Log "Error" "Specified Path does not exist : $($Path)" "" $sLogFileJson
+            Write-Verbose-Log "Error" "Specified Path does not exist : $($Path)" "MissingRequirement" $sLogFileJson
             exit
         }
+    }
+}
+
+function Load-ART ()
+{
+    if (-not (Test-Path $ARTPath))
+    {
+        Write-Verbose-Log "Error" "ART Module does not exist : $($ARTPath)" "MissingRequirement" $sLogFileJson
+        exit
+    }
+    try
+    {
+        Import-Module $ARTPath
+    }
+    catch
+    {
+        Write-Verbose-Log "Error" "Error when loading ART Module" $_.Exception $sLogFileJson
+        exit
     }
 }
 
@@ -88,7 +107,8 @@ Log-Rotate
 Write-Verbose-Log "INFO" "Path Verification" "" $sLogFileJson
 Verify-Paths
 
-# Load ART Powershell Framework
+Write-Verbose-Log "INFO" "Load ART PS Framework" "" $sLogFileJson
+Load-ART
  
 # Get Latest Atomic Checks
 
