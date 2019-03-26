@@ -4,8 +4,14 @@
 
 .DESCRIPTION
 
-.PARAMETER $TestPaths
-  Locations of Atomic Red Team Tests
+.PARAMETER $ARTPath
+  Locations of Atomic Red Team Module (psm1)
+
+.PARAMETER $Sleeptime
+  Sleeping time between two ART checks execution (default to 300 seconds)
+
+.PARAMETER $CheckToExecute
+  Specify the ATT&CK check that you want to execute or all for executing all of them (default to All)
 
 .OUTPUTS
 
@@ -22,8 +28,9 @@
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 param(
-  [string]$TestPaths,
-  [string]$ARTPath = "C:\Program Files\atomic-red-team\execution-frameworks\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam.psm1"
+  [string]$ARTPath = "C:\Program Files\atomic-red-team\execution-frameworks\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam.psm1",
+  [int]$SleepTime = 300,
+  [string[]]$CheckToExecute = @($Execute_All)
 )
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
@@ -41,8 +48,11 @@ $Keep = 5
 $Temp_Folder = "C:\Windows\Temp"
 
 #Git
-$Test_Path_Git = "..."
+$Test_Path_Git = "ssh://git@git.iter.org/itsecu/atomic_tests.git"
 $Atomic_Checks = Join-Path -Path $Temp_Folder -ChildPath "atomic_tests"
+
+#ART constants
+$Execute_All = "All"
 
 
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
@@ -126,6 +136,67 @@ function Clean-Up ()
     Remove-Item -Recurse -Force -Path $Atomic_Checks
 }
 
+function Load-Atomic-Checks ()
+{
+    #Dictionnary with ATT&CK ID as key and array of ART objects as value
+    $All_Atomic_Tests_To_Execute = @{}
+    #Get Top Level Folders
+    $All_Top_Folders = Get-ChildItem -Path $Atomic_Checks
+    #Get checks from all top folders
+    foreach ($Top_Folder in $All_Top_Folders)
+    {
+        $All_Attack_Folder = Get-ChildItem -Path $Top_Folder
+        foreach ($Attack_Folder in $All_Attack_Folder)
+        {
+            #Add check if execute all flag is set
+            if ($CheckToExecute.Contains($Execute_All) -or $CheckToExecute.Contains($Attack_Folder))
+            {
+                $Attack_ID = Split-Path $Attack_Folder -Leaf
+                $ART_Check = Create-ART-Check ($Attack_ID, $Attack_Folder)
+                Add-Check-To-Queue ($All_Atomic_Tests_To_Execute, $Attack_ID, $ART_Check)
+            }
+        }
+    }
+    return $All_Atomic_Tests_To_Execute
+}
+
+#From folder create ART object
+function Create-ART-Check ($Attack_ID, $Attack_Folder)
+{
+    $Check_Path = Join-Path -Path $Attack_Folder -ChildPath "$($Attack_ID).yaml"
+    $Current_Location = Get-Location
+    Set-Location $Attack_Folder
+    if (-not (Test-Path $Check_Path))
+    {
+        Set-Location $Current_Location
+        Write-Verbose-Log "Error" "Specified Path does not exist for ATT&CK ID $($Attack_ID)" "MissingRequirement" $sLogFileJson
+        exit
+    }
+    #Create Object
+    $ART_Object = Get-AtomicTechnique -Path $Check_Path
+    Set-Location $Current_Location
+    return $ART_Object
+}
+
+function Add-Check-To-Queue ($All_Atomic_Tests_To_Execute, $Attack_ID, $ART_Check)
+{
+    #Check if a check already exists in dictionary
+    if ($All_Atomic_Tests_To_Execute.ContainsKey($Attack_Folder))
+    {
+        #Add Check to array
+        $ART_Object_Array = $All_Atomic_Tests_To_Execute."$($Attack_ID)"
+        $ART_Object_Array += $ART_Check
+        $All_Atomic_Tests_To_Execute."$($Attack_ID)" = $ART_Object_Array
+    }
+    else
+    {
+        #Create Array
+        $ART_Object_Array = @($ART_Check)
+        $All_Atomic_Tests_To_Execute.Add($Attack_ID, $ART_Object_Array)
+    }
+    return $All_Atomic_Tests_To_Execute
+}
+
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
@@ -141,9 +212,10 @@ Write-Verbose-Log "INFO" "Load ART PS Framework" "" $sLogFileJson
 Load-ART
 
 Write-Verbose-Log "INFO" "Get Latest Atomic Checks" "" $sLogFileJson
-#Update-Atomic-Checks-Dirs 
+Get-Latest-Atomic-Checks
 
-# Handle Parameters
+Write-Verbose-Log "INFO" "Load Atomic Check Configuration" "" $sLogFileJson
+Load-Atomic-Checks
 
 # Launch Checks
 
