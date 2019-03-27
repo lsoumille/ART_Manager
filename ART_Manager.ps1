@@ -13,10 +13,16 @@
 .PARAMETER $CheckToExecute
   Specify the ATT&CK check that you want to execute or all for executing all of them (default to All)
 
+.PARAMETER $WhatIf
+  Use this switch to make a dry run
+
+.PARAMETER $LogDir
+  ART check log location
+
 .OUTPUTS
 
 .NOTES
-  Version:        1.0
+  Version:        0.1
   Author:         SOUMILL
   Creation Date:  March 25th 2018
   Purpose/Change: Initial script development
@@ -31,22 +37,22 @@ param(
   [string]$ARTPath = "C:\Program Files\atomic-red-team\execution-frameworks\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam.psm1",
   [int]$SleepTime = 300,
   [string[]]$CheckToExecute = "All",
-  [switch]$WhatIf
+  [switch]$WhatIf,
+  [string]$LogDir = "C:\Program Files\atomic-red-team\art_launcher\logs"
 )
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Script Version
-$sScriptVersion = "1.0"
+$sScriptVersion = "0.1"
 
 #ConfirmPreference
 $ConfirmPreference = "High"
 
 #Log File Info
 $day = Get-Date -Format "dd-MMM-yyyy"
-$sLogPath = ".\"
-$sLogName = "art_manager_$($day).log"
-$sLogFileJson = Join-Path -Path $sLogPath -ChildPath $sLogName
+$Log_Name = "art_manager_$($day).log"
+$Log_File = Join-Path -Path $LogDir -ChildPath $Log_Name
 $Keep = 5
 
 $Temp_Folder = "C:\Windows\Temp"
@@ -61,29 +67,57 @@ $Execute_All = "All"
 
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
 
-function Write-Verbose-Log ($Severity, $Message, $Exception, $Path_To_Log)
+function Write-Verbose-Log ($Severity, $Message, $Exception, $Path_To_Log, $Color)
 {
     $Log_TS = Get-Date -Format HH:mm:ss.fff
-
+	
+	
     if ($Severity -eq "ERROR")
     {
-        $NewLogData = @{ "Time" = $Log_TS; "Message" = $Message; "Exception" = $Exception; "Severity" = $Severity }
+        Write-Error -Exception $Exception -Message "[$($Severity) - $($Exception)] $($Message)"
+    }
+    elseif ($Color)
+    {
+        Write-Host "[$($Severity) - $($Exception)] $($Message)" -ForegroundColor DarkGreen -BackgroundColor White
     }
     else
     {
-        $NewLogData = @{ "Time" = $Log_TS; "Message" = $Message; "Exception" = $Exception; "Severity" = $Severity }
+        Write-Host "[$($Severity) - $($Exception)] $($Message)"
     }
-    $CurrentLog = ConvertTo-Json $NewLogData -Compress
-    $CurrentLog | Out-File ($Path_To_Log -replace '"',"")  -Append utf8
+}
+
+function Write-Trace ($ART_Output, $ART_Information_Output, $Attack_ID, $Check_Description)
+{
+    $Log_TS = Get-Date -Format HH:mm:ss.fff
+
+	if (-not (Test-Path $LogDir))
+	{
+		New-Item -ItemType Directory -Path $LogDir
+	}
+    $Message = "" 
+    foreach($Info_Line in $($ART_Information_Output -split "`n"))
+    {
+        if ($Info_Line -eq "[!!!!!!!!END TEST!!!!!!!]") 
+        {
+            foreach($Output_Line in $($ART_Output -split "`t"))
+            {
+                $Message = "$($Message)$($Output_Line.Trim())`n"
+            }            
+        }
+        $Message = "$($Message)$($Info_Line.Trim())`n"
+    }
+    $Log_Data = @{ "timestamp" = $Log_TS ; "attack_id" = $Attack_ID ; "attack_test" = $Check_Description ; "message" = $Message }
+    $CurrentLog = ConvertTo-Json $Log_Data -Compress
+    $CurrentLog | Out-File ($Log_File -replace '"',"")  -Append utf8
 }
 
 function Log-Rotate ()
 {
-    $NumberOfFiles = Get-ChildItem $sLogPath -File *.log | Measure-Object | %{$_.Count}
+    $NumberOfFiles = Get-ChildItem $LogDir -File *.log | Measure-Object | %{$_.Count}
     if ($NumberOfFiles -gt $Keep) 
     {
         $NumberOfFilesToDelete = $NumberOfFiles - $Keep
-        Get-ChildItem $sLogPath -File *.log | Sort CreationTime | Select -First $NumberOfFilesToDelete | Remove-Item
+        Get-ChildItem $LogDir -File *.log | Sort CreationTime | Select -First $NumberOfFilesToDelete | Remove-Item
     }
 }
 
@@ -240,52 +274,59 @@ function Launch-ART-Checks ($All_Atomic_Tests_To_Execute)
      #Go over all Attack IDs
      foreach($Attack_ID in $All_Atomic_Tests_To_Execute.Keys)
      {
-         #Go over all checks for this Attack ID 
-         foreach ($ART_Check in $All_Atomic_Tests_To_Execute.$Attack_ID)
-         {
-            #Check if dry run mode is set
-            if ($WhatIf)
+		Write-Verbose-Log "INFO" "Start ART Checks for ATT&CK ID $($Attack_ID)" "Execution" $sLogFileJson $true
+        #Go over all checks for this Attack ID 
+        foreach ($ART_Check in $All_Atomic_Tests_To_Execute.$Attack_ID)
+        {
+            Write-Verbose-Log "INFO" "Beginning of $($ART_Check.display_name)" "Execution" $sLogFileJson
+			#Check if dry run mode is set
+			if ($WhatIf)
+			{
+				Invoke-AtomicTest -GenerateOnly -InformationAction Continue $ART_Check
+			}
+			else
+			{
+				Invoke-AtomicTest $ART_Check -InformationVariable Information_Trace -OutVariable Output | Out-Null
+                Write-Trace $Output $Information_Trace $Attack_ID $ART_Check.display_name
+			}
+            Write-Verbose-Log "INFO" "End of $($ART_Check.display_name)" "Execution" $sLogFileJson
+            if (-not $WhatIf)
             {
-                Invoke-AtomicTest -GenerateOnly -InformationAction Continue $ART_Check
+                #Sleep between checks
+		        Start-Sleep -s $SleepTime
             }
-            else
-            {
-                Invoke-AtomicTest -InformationAction Continue $ART_Check
-            }
-         }
+        }
      }   
-    
 }
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
-Write-Verbose-Log "INFO" "Script Start" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Script Start" "Execution" $sLogFileJson
 Clean-Up
 
-Write-Verbose-Log "INFO" "Start Logrotate" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Start Logrotate" "Execution" $sLogFileJson
 Log-Rotate
 
-Write-Verbose-Log "INFO" "Load ART PS Framework" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Load ART PS Framework" "Execution" $sLogFileJson
 Load-ART
 
-Write-Verbose-Log "INFO" "Get Latest Atomic Checks" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Get Latest Atomic Checks" "Execution" $sLogFileJson
 Get-Latest-Atomic-Checks
 
-Write-Verbose-Log "INFO" "Load Atomic Check Configuration" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Load Atomic Check Configuration" "Execution" $sLogFileJson
 $All_Atomic_Tests_To_Execute = Load-Atomic-Checks
 
 if (-not ($All_Atomic_Tests_To_Execute) -or ($All_Atomic_Tests_To_Execute.Count -eq 0))
 {
-    Write-Verbose-Log "ERROR" "No ART Check to run" "" $sLogFileJson
+    Write-Verbose-Log "ERROR" "No ART Check to run" "MissingRequirement" $sLogFileJson
     Clean-Up
     Exit
 }
 
-# Launch Checks
-Write-Verbose-Log "INFO" "ART Execution" "" $sLogFileJson
+Write-Verbose-Log "INFO" "ART Execution" "Execution" $sLogFileJson
 Launch-ART-Checks $All_Atomic_Tests_To_Execute
 
-Write-Verbose-Log "INFO" "Clean Up" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Clean Up" "Execution" $sLogFileJson
 Clean-Up
 
-Write-Verbose-Log "INFO" "Script End" "" $sLogFileJson
+Write-Verbose-Log "INFO" "Script End" "Execution" $sLogFileJson
