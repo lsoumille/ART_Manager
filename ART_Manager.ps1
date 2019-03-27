@@ -36,7 +36,7 @@
 param(
   [string]$ARTPath = "C:\Program Files\atomic-red-team\execution-frameworks\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam\Invoke-AtomicRedTeam.psm1",
   [int]$SleepTime = 300,
-  [string[]]$CheckToExecute = "All",
+  [string[]]$CheckToExecute = "all",
   [switch]$WhatIf,
   [string]$LogDir = "C:\Program Files\atomic-red-team\art_launcher\logs"
 )
@@ -182,6 +182,11 @@ function Load-Atomic-Checks ()
 {
     try
     {
+        #Convert checktoexecute parameter to lowercase
+        for ($i = 0 ; $i -ne $CheckToExecute.Length ; $i = $i +1)
+        {
+            $CheckToExecute[$i] = $CheckToExecute[$i].ToLower() 
+        }
         #Dictionnary with ATT&CK ID as key and array of ART objects as value
         $All_Atomic_Tests_To_Execute = @{}
         #Get Top Level Folders
@@ -201,9 +206,8 @@ function Load-Atomic-Checks ()
                     if ((Get-Item $Attack_Folder_Path) -is [System.IO.DirectoryInfo])
                     {
                         #Add check if execute all flag is set
-                        if ($CheckToExecute.Contains($Execute_All) -or $CheckToExecute.Contains($Attack_Folder))
+                        if ($CheckToExecute.Contains($Execute_All) -or $CheckToExecute.Contains($Attack_Folder.ToString().ToLower()))
                         {
-                            #$Attack_ID = Split-Path $Attack_Folder -Leaf
                             $ART_Check = Create-ART-Check $Attack_Folder_Path
                             $All_Atomic_Tests_To_Execute = Add-Check-To-Queue $All_Atomic_Tests_To_Execute $ART_Check
                         }
