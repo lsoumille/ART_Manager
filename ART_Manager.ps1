@@ -58,7 +58,7 @@ $Keep = 5
 $Temp_Folder = "C:\Windows\Temp"
 
 #Git
-$Test_Path_Git = "ssh://git@git.iter.org/itsecu/atomic_tests.git"
+$Test_Path_Git = "XXXXX"
 $Atomic_Checks = Join-Path -Path $Temp_Folder -ChildPath "atomic_tests"
 
 #ART constants
