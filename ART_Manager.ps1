@@ -88,7 +88,7 @@ function Write-Verbose-Log ($Severity, $Message, $Exception, $Path_To_Log, $Colo
 
 function Write-Trace ($ART_Output, $ART_Information_Output, $Attack_ID, $Check_Description)
 {
-    $Log_TS = Get-Date -Format HH:mm:ss.fff
+    $Log_TS = Get-Date -Format s
 
 	if (-not (Test-Path $LogDir))
 	{
