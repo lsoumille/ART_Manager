@@ -38,7 +38,8 @@ param(
   [int]$SleepTime = 300,
   [string[]]$CheckToExecute = "all",
   [switch]$WhatIf,
-  [string]$LogDir = "C:\Program Files\atomic-red-team\art_launcher\logs"
+  [string]$LogDir = "C:\Program Files\atomic-red-team\art_launcher\logs",
+  [string]$CheckName
 )
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
@@ -242,6 +243,17 @@ function Create-ART-Check ($Attack_Folder)
         }
         #Create Object
         $ART_Object = Get-AtomicTechnique -Path $Check_Path
+        if ($CheckName -and $CheckName -ne "")
+        {
+            foreach($Check in $ART_Object.atomic_tests)
+            {
+                if ($Check.name.ToLower() -eq $CheckName.ToLower())
+                {
+                    $ART_Object.atomic_tests = $Check
+                    break
+                }
+            }
+        }
         Set-Location $Current_Location
         return $ART_Object
     }
